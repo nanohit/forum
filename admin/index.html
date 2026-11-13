@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Психосфера — админ</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lora:wght@400;600&family=Manrope:wght@400;500;600;700&display=swap&subset=cyrillic">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<script>
+/* Статика раздаётся с jsDelivr по SHA коммита (подставляется при деплое), при сбое — с GitHub Pages */
+(function () {
+  var sha = '__SHA__', local = '../assets/';
+  var cdn = sha.indexOf('__') === 0 ? local : 'https://cdn.jsdelivr.net/gh/nanohit/forum@' + sha + '/assets/';
+  window.__assets = { cdn: cdn, local: local };
+  var l = document.createElement('link');
+  l.rel = 'stylesheet'; l.href = cdn + 'admin.css';
+  l.onerror = function () { l.onerror = null; l.href = local + 'admin.css'; };
+  document.head.appendChild(l);
+})();
+</script>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function load(files) {
+  if (!files.length) return;
+  var a = window.__assets, f = files[0];
+  function add(src, fallback) {
+    var s = document.createElement('script');
+    s.src = src;
+    s.onload = function () { load(files.slice(1)); };
+    if (fallback) s.onerror = function () { s.remove(); add(a.local + f); };
+    document.body.appendChild(s);
+  }
+  add(a.cdn + f, a.cdn !== a.local);
+})(['data.js', 'admin.js']);
+</script>
+</body>
+</html>

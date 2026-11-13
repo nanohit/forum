@@ -1,0 +1,33 @@
+name: Deploy Pages
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin assets to this commit on jsDelivr
+        run: |
+          sed -i "s/__SHA__/${GITHUB_SHA}/" index.html admin/index.html
+          # прогреваем CDN, чтобы первый посетитель не ждал
+          for f in data.js site.js site.css admin.js admin.css; do
+            curl -s -o /dev/null "https://cdn.jsdelivr.net/gh/${GITHUB_REPOSITORY}@${GITHUB_SHA}/assets/$f" || true
+          done
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
