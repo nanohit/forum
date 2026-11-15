@@ -153,7 +153,7 @@
     root.innerHTML = nav(d) + (PAGE === 'speakers' ? speakersPage(d) : mainPage(d)) + footer(d.footer || {});
     root.classList.add('ready');
     if (location.hash) {
-      var t = document.getElementById(location.hash.slice(1));
+      var t = document.getElementById(decodeURIComponent(location.hash.slice(1)));
       if (t) { t.classList.add('hl'); t.scrollIntoView(); }
     }
   }
