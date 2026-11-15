@@ -1,7 +1,9 @@
 (function () {
   var F = window.FORUM, app = document.getElementById('app'), TK = 'forum:admin:token';
 
-  // Схема редактора: [ключ, подпись, тип]. Тип: 'str' | 'text' | 'lines' | {list: [...поля], add: {...}, item: 'подпись'}
+  // Схема редактора: [ключ, подпись, тип].
+  // Тип: 'str' | 'text' | 'lines' | 'time' | 'check' | 'photo' | {list: [...поля], add: {...}, item: 'подпись'}
+  var HIDE = ['hidden', 'Скрыть этот блок на сайте', 'check'];
   var SCHEMA = [
     ['hero', 'Шапка', [
       ['kicker', 'Надзаголовок'], ['title', 'Название'], ['lead', 'Подзаголовок', 'text'], ['text', 'Описание', 'text'],
@@ -29,6 +31,18 @@
       ['title', 'Заголовок'],
       ['items', 'Варианты', { item: 'Вариант', add: { value: '', note: '' }, list: [['value', 'Цена'], ['note', 'Для кого', 'text']] }]
     ]],
+    ['speakers', 'Спикеры', [
+      ['title', 'Заголовок'], ['intro', 'Вступление (необязательно)', 'text'],
+      ['items', 'Спикеры', { item: 'Спикер', add: { photo: '', name: '', role: '', topic: '', section: '' }, list: [
+        ['photo', 'Фото', 'photo'], ['name', 'Фамилия Имя'], ['section', 'Секция'],
+        ['role', 'Кто это: должность, регалии', 'text'], ['topic', 'Тема доклада', 'text']
+      ] }]
+    ]],
+    ['', 'Дополнительные блоки', [
+      ['extra', 'Свои блоки — появляются перед стоимостью', { item: 'Блок', add: { title: '', text: '', items: [] }, list: [
+        HIDE, ['title', 'Заголовок'], ['text', 'Текст', 'text'], ['items', 'Пункты списка — по одному на строку', 'lines']
+      ] }]
+    ]],
     ['footer', 'Подвал', [['date', 'Дата'], ['time', 'Время'], ['address', 'Адрес'], ['city', 'Город'], ['year', 'Нижняя строка']]]
   ];
 
@@ -42,14 +56,14 @@
 
   /* ---------- вход ---------- */
   function decrypt(login, pass) {
-    var enc = F.writeTokenEnc, s = crypto.subtle;
+    var enc = F.secretsEnc, s = crypto.subtle;
     return s.importKey('raw', new TextEncoder().encode(login + ':' + pass), 'PBKDF2', false, ['deriveKey'])
       .then(function (base) {
         return s.deriveKey({ name: 'PBKDF2', salt: b64(enc.salt), iterations: 250000, hash: 'SHA-256' },
           base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
       })
       .then(function (key) { return s.decrypt({ name: 'AES-GCM', iv: b64(enc.iv) }, key, b64(enc.ct)); })
-      .then(function (buf) { return new TextDecoder().decode(buf); });
+      .then(function (buf) { return JSON.parse(new TextDecoder().decode(buf)); });
   }
 
   function loginView() {
@@ -63,9 +77,9 @@
       e.preventDefault();
       var btn = f.querySelector('button'), err = f.querySelector('.err');
       btn.disabled = true; err.textContent = '';
-      decrypt(f.l.value.trim(), f.p.value).then(function (tok) {
-        sessionStorage.setItem(TK, tok);
-        editorView(tok);
+      decrypt(f.l.value.trim(), f.p.value).then(function (keys) {
+        sessionStorage.setItem(TK, JSON.stringify(keys));
+        editorView(keys);
       }).catch(function () {
         err.textContent = 'Неверный логин или пароль';
         btn.disabled = false;
@@ -76,7 +90,7 @@
   }
 
   /* ---------- редактор ---------- */
-  var data, dirty = false, saveBtn, status;
+  var data, keys, dirty = false, saveBtn, status;
 
   function touch() {
     dirty = true;
@@ -86,6 +100,14 @@
   }
 
   function field(obj, key, label, type) {
+    if (type === 'check') {
+      var c = el('label', 'check'), cb = el('input');
+      cb.type = 'checkbox'; cb.checked = !!obj[key];
+      cb.onchange = function () { obj[key] = cb.checked; touch(); };
+      c.appendChild(cb); c.appendChild(el('span', null, label));
+      return c;
+    }
+    if (type === 'photo') return photoField(obj, key);
     var w = el('label', 'field' + (type === 'time' ? ' narrow' : ''));
     w.appendChild(el('span', null, label));
     var input;
@@ -108,6 +130,49 @@
     w.appendChild(input);
     return w;
   }
+  /* фото: сжимаем в браузере и грузим на imgbb */
+  function shrink(file, max) {
+    return new Promise(function (ok, fail) {
+      var img = new Image(), url = URL.createObjectURL(file);
+      img.onload = function () {
+        var k = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas');
+        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        ok(c.toDataURL('image/jpeg', 0.86).split(',')[1]);
+      };
+      img.onerror = function () { fail(new Error('не удалось прочитать файл')); };
+      img.src = url;
+    });
+  }
+  function photoField(obj, key) {
+    var w = el('div', 'photo'), pic = el('div', 'photo-pic'), side = el('div', 'photo-side');
+    var up = el('label', 'btn ghost small', 'Загрузить фото'), file = el('input'), del = el('button', 'btn ghost small', 'Убрать');
+    var msg = el('span', 'photo-msg');
+    file.type = 'file'; file.accept = 'image/*'; file.hidden = true; up.appendChild(file); del.type = 'button';
+    function show() {
+      pic.innerHTML = obj[key] ? '<img src="' + obj[key] + '" alt="">' : '<span>нет фото</span>';
+      del.hidden = !obj[key];
+    }
+    file.onchange = function () {
+      var f = file.files[0]; if (!f) return;
+      msg.textContent = 'Загружаю…'; up.classList.add('busy');
+      shrink(f, 900).then(function (b64) {
+        var fd = new FormData(); fd.append('image', b64);
+        return fetch('https://api.imgbb.com/1/upload?key=' + keys.imgbb, { method: 'POST', body: fd });
+      }).then(function (r) { return r.json(); }).then(function (j) {
+        if (!j.success) throw new Error((j.error && j.error.message) || 'ошибка imgbb');
+        obj[key] = j.data.url; show(); touch(); msg.textContent = 'Готово — не забудьте сохранить';
+      }).catch(function (e) { msg.textContent = 'Ошибка: ' + e.message; })
+        .then(function () { up.classList.remove('busy'); file.value = ''; });
+    };
+    del.onclick = function () { obj[key] = ''; show(); touch(); msg.textContent = ''; };
+    show();
+    side.appendChild(up); side.appendChild(del); side.appendChild(msg);
+    w.appendChild(pic); w.appendChild(side);
+    return w;
+  }
+
   function fit(t) { t.style.height = 'auto'; t.style.height = t.scrollHeight + 2 + 'px'; }
   function autosize(t) { t.rows = 2; requestAnimationFrame(function () { fit(t); }); }
 
@@ -134,7 +199,8 @@
       items.innerHTML = '';
       arr.forEach(function (it, i) {
         var card = el('div', 'item'), bar = el('div', 'item-bar');
-        bar.appendChild(el('span', 'item-n', spec.item + ' ' + (i + 1)));
+        var nm = it.name || it.title || it.value || '';
+        bar.appendChild(el('span', 'item-n', spec.item + ' ' + (i + 1) + (nm ? ' · ' + nm : '')));
         var tools = el('span', 'tools');
         [['↑', 'Выше', i > 0, function () { arr.splice(i - 1, 0, arr.splice(i, 1)[0]); }],
          ['↓', 'Ниже', i < arr.length - 1, function () { arr.splice(i + 1, 0, arr.splice(i, 1)[0]); }],
@@ -168,12 +234,12 @@
     return wrap;
   }
 
-  function save(tok) {
+  function save() {
     saveBtn.disabled = true;
     status.textContent = 'Сохраняю…'; status.className = 'status';
     fetch(F.url, {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + tok },
+      headers: { Authorization: 'Bearer ' + keys.upstash },
       body: JSON.stringify(['SET', F.key, JSON.stringify(data)])
     }).then(function (r) { return r.json(); }).then(function (j) {
       if (j.error) throw new Error(j.error);
@@ -187,7 +253,8 @@
     });
   }
 
-  function editorView(tok) {
+  function editorView(k) {
+    keys = k;
     app.innerHTML = '<p class="loading">Загрузка…</p>';
     F.get().then(function (d) {
       data = d || JSON.parse(JSON.stringify(F.defaults));
@@ -204,19 +271,20 @@
       out.onclick = function () { sessionStorage.removeItem(TK); loginView(); };
       saveBtn = el('button', 'btn primary', 'Сохранить');
       saveBtn.disabled = true;
-      saveBtn.onclick = function () { save(tok); };
+      saveBtn.onclick = save;
       acts.appendChild(view); acts.appendChild(out); acts.appendChild(saveBtn);
       top.appendChild(acts);
       app.appendChild(top);
 
       var main = el('main', 'blocks');
       SCHEMA.forEach(function (s, i) {
-        if (!data[s[0]]) data[s[0]] = {};
+        var obj = s[0] ? (data[s[0]] = data[s[0]] || {}) : data;
+        if (!s[0] && !data.extra) data.extra = [];
         var det = el('details', 'block');
         if (i === 0) det.open = true;
         det.appendChild(el('summary', null, s[1]));
         var body = el('div', 'block-body');
-        fields(body, data[s[0]], s[2]);
+        fields(body, obj, s[0] ? [HIDE].concat(s[2]) : s[2]);
         det.appendChild(body);
         main.appendChild(det);
       });
@@ -233,6 +301,7 @@
     }
   });
 
-  var t = sessionStorage.getItem(TK);
-  t ? editorView(t) : loginView();
+  var saved = null;
+  try { saved = JSON.parse(sessionStorage.getItem(TK)); } catch (e) {}
+  saved && saved.upstash ? editorView(saved) : loginView();
 })();

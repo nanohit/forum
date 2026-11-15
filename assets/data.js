@@ -1,10 +1,10 @@
 /* Конфигурация и исходный контент сайта.
    Публичный токен — только чтение ключей forum:* (ACL-пользователь forum_read).
-   Токен записи зашифрован логином/паролем админа (AES-GCM + PBKDF2). */
+   Токен записи и ключ imgbb зашифрованы логином/паролем админа (AES-GCM + PBKDF2). */
 window.FORUM = {
   url: 'https://devoted-viper-201621.upstash.io',
   readToken: 'gwAAAAAAAxOVAAIKQHAyZm9ydW1fcmVhZDSN8rtKzk51KXXkAHXoml8Q6JtnJNnwHraYUAVDU96rKpcgCBrwJiPYyKjNF53Qty32Ajm2ykZwjsMXswA_zYk',
-  writeTokenEnc: {"salt":"cxOKySmQNfAgzWmAb8jB4A==","iv":"yDHUFTDO4ua6jduB","ct":"S46gWqILbrAt0L/OFbPZwwaglYzXe0Jq+XZIE1a8sd/bOa17eUO2sCp2rz7adC+ShEm33fJtw038JyHBugjMm+hxTNktahyZp0BI6Yaw2AQ5j2HR/FjICDjFK7/jhqqqZOiVfPb1x5S3DpLrsl6gpRwbT9InS6Z20J7t3z+3PXOoGAcLvrvqKw=="},
+  secretsEnc: {"salt":"5F9Qs6ermamI404I90DsKw==","iv":"w52VN9r9HUvjtba6","ct":"ruJCQgWWNUZfaFVPCNiFQSsvK92SyBDkskJF6X7iknaViaClYdfv4svb22EDZ3XdCJK+WBln5yZieLrw0yyeCbI5NVWWTMtZqahZUx87VTS07e2DTpYmJ+rANXlkizDRIE0BR5FBJ7yx/CVdHcZmTAZM+hX0gt15EpbclVgMvEfuSWoQjxXdPmr20sj44tQ115PdFGzGPLA5ZiJ19fAkvyknly8LNzhdpbVpPGPNCkFm7PYL9Tixc5CeNMZgOWbsow=="},
   key: 'forum:content',
 
   get: function () {
@@ -98,6 +98,12 @@ window.FORUM = {
         { value: 'бесплатно', note: 'для студентов дневных отделений Института гуманитарного образования' }
       ]
     },
+    speakers: {
+      title: 'Спикеры',
+      intro: '',
+      items: []
+    },
+    extra: [],
     footer: {
       date: '22 ноября / Суббота',
       time: '9:00 – 16:30',
@@ -107,3 +113,14 @@ window.FORUM = {
     }
   }
 };
+
+// Стартовый список спикеров — ведущие секций (фото, регалии и темы заполняются в админке)
+(function (d) {
+  d.sections.lines.forEach(function (l) {
+    l.groups.forEach(function (g) {
+      g.people.forEach(function (n) {
+        d.speakers.items.push({ photo: '', name: n, role: '', topic: '', section: g.title });
+      });
+    });
+  });
+})(window.FORUM.defaults);
