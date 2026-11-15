@@ -152,9 +152,12 @@
     if (PAGE === 'main' && h.title) document.title = h.title + (h.kicker ? ' — ' + h.kicker : '');
     root.innerHTML = nav(d) + (PAGE === 'speakers' ? speakersPage(d) : mainPage(d)) + footer(d.footer || {});
     root.classList.add('ready');
-    if (location.hash) {
+    if (location.hash && !render.jumped) {
       var t = document.getElementById(decodeURIComponent(location.hash.slice(1)));
-      if (t) { t.classList.add('hl'); t.scrollIntoView(); }
+      if (t) {
+        render.jumped = true; t.classList.add('hl');
+        setTimeout(function () { t.scrollIntoView({ block: 'center' }); }, 60);
+      }
     }
   }
 

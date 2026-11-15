@@ -72,3 +72,4 @@ textarea { resize: vertical; min-height: 42px; line-height: 1.45; overflow: hidd
 .btn.small { padding: 6px 12px; font-size: 14px; }
 .btn.busy { opacity: .5; pointer-events: none; }
 .photo-msg { width: 100%; font-size: 13px; color: var(--muted); }
+[hidden] { display: none !important; }
